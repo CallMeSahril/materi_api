@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}Manajemen Soal{% endblock %}
+{% block content %}
+
+<div class="container mt-4">
+    <h2 class="mb-4">Daftar Soal</h2>
+    <button class="btn btn-primary mb-3" onclick="showModal()">Tambah Soal</button>
+
+    <table class="table table-bordered table-striped">
+        <thead class="table-dark">
+            <tr>
+                <th>ID</th>
+                <th>Pertanyaan</th>
+                <th>A</th><th>B</th><th>C</th><th>D</th>
+                <th>Jawaban</th><th>Gambar</th><th>Aksi</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in soal %}
+            <tr>
+                <td>{{ s.id }}</td>
+                <td>{{ s.pertanyaan }}</td>
+                <td>{{ s.pilihan_a }}{% if s.gambar_a %}<br><img src="{{ url_for('static', filename='uploads/'~s.gambar_a) }}" width="60">{% endif %}</td>
+                <td>{{ s.pilihan_b }}{% if s.gambar_b %}<br><img src="{{ url_for('static', filename='uploads/'~s.gambar_b) }}" width="60">{% endif %}</td>
+                <td>{{ s.pilihan_c }}{% if s.gambar_c %}<br><img src="{{ url_for('static', filename='uploads/'~s.gambar_c) }}" width="60">{% endif %}</td>
+                <td>{{ s.pilihan_d }}{% if s.gambar_d %}<br><img src="{{ url_for('static', filename='uploads/'~s.gambar_d) }}" width="60">{% endif %}</td>
+                <td>{{ s.jawaban_benar }}</td>
+                <td>{% if s.gambar %}<img src="{{ url_for('static', filename='uploads/'~s.gambar) }}" width="60">{% else %}-{% endif %}</td>
+                <td>
+                    <button class="btn btn-warning btn-sm" onclick='editSoal({{ s|tojson }})'>Edit</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteSoal({{ s.id }})">Hapus</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="soalModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <form id="soalForm" class="modal-content" enctype="multipart/form-data">
+            <div class="modal-header">
+                <h5 class="modal-title">Form Soal</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body row">
+                <input type="hidden" name="id" id="soalId">
+                {% for key in ['gambar', 'gambar_a', 'gambar_b', 'gambar_c', 'gambar_d'] %}
+                <input type="hidden" name="{{ key }}_lama" id="{{ key }}_lama">
+                {% endfor %}
+
+                <div class="col-md-12 mb-2">
+                    <label>Pertanyaan</label>
+                    <input class="form-control" name="pertanyaan" id="pertanyaan" required>
+                </div>
+
+                {% for abcd in ['a', 'b', 'c', 'd'] %}
+                <div class="col-md-6 mb-2">
+                    <label>Pilihan {{ abcd|upper }}</label>
+                    <input class="form-control" name="pilihan_{{ abcd }}" id="pilihan_{{ abcd }}" required>
+                </div>
+                <div class="col-md-6 mb-2">
+                    <label>Gambar {{ abcd|upper }}</label>
+                    <input type="file" class="form-control" name="gambar_{{ abcd }}" id="gambar_{{ abcd }}">
+                    <div id="gambar_{{ abcd }}_preview" class="mt-1"></div>
+                </div>
+                {% endfor %}
+
+                <div class="col-md-6 mb-2">
+                    <label>Jawaban Benar</label>
+                    <input class="form-control" name="jawaban_benar" id="jawaban_benar" required>
+                </div>
+
+                <div class="col-md-6 mb-2">
+                    <label>Kumpulan Soal</label>
+                    <select name="kumpulan_soal_id" id="kumpulan_soal_id" class="form-select" required>
+                        <option value="">-- Pilih --</option>
+                    </select>
+                </div>
+
+                <div class="col-md-12 mb-2">
+                    <label>Penjelasan</label>
+                    <textarea class="form-control" name="penjelasan" id="penjelasan"></textarea>
+                </div>
+
+                <div class="col-md-12 mb-2">
+                    <label>Gambar Utama</label>
+                    <input type="file" class="form-control" name="gambar" id="gambar">
+                    <div id="gambar_preview" class="mt-1"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                <button class="btn btn-primary" type="submit">Simpan</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    fetch('/api/soal-crud/kumpulan-soal')
+    .then(res => res.json())
+    .then(data => {
+        const select = document.getElementById('kumpulan_soal_id');
+        select.innerHTML = '<option value="">-- Pilih --</option>';
+        data.forEach(item => {
+            const opt = document.createElement('option');
+            opt.value = item.id;
+            opt.textContent = item.nama;
+            select.appendChild(opt);
+        });
+    });
+    document.addEventListener("DOMContentLoaded", () => {
+        const modal = new bootstrap.Modal(document.getElementById('soalModal'));
+        const form = document.getElementById('soalForm');
+
+        window.showModal = () => {
+            form.reset();
+            form.querySelectorAll("input[type='hidden']").forEach(el => el.value = '');
+            ['gambar', 'gambar_a', 'gambar_b', 'gambar_c', 'gambar_d'].forEach(key => {
+                document.getElementById(`${key}_preview`).innerHTML = '';
+            });
+            modal.show();
+        };
+
+        window.editSoal = soal => {
+            form.reset();
+            document.getElementById('soalId').value = soal.id;
+            ['pertanyaan', 'pilihan_a', 'pilihan_b', 'pilihan_c', 'pilihan_d', 'jawaban_benar', 'penjelasan'].forEach(k => {
+                document.getElementById(k).value = soal[k];
+            });
+            document.getElementById('kumpulan_soal_id').value = soal.kumpulan_soal_id;
+
+            ['gambar', 'gambar_a', 'gambar_b', 'gambar_c', 'gambar_d'].forEach(key => {
+                document.getElementById(`${key}_lama`).value = soal[key] || '';
+                const preview = document.getElementById(`${key}_preview`);
+                preview.innerHTML = soal[key]
+                    ? `<img src="/static/uploads/${soal[key]}" width="100" class="mb-1"><br>
+                       <input type="checkbox" name="hapus_${key}"> Hapus gambar`
+                    : '<p class="text-muted">Tidak ada gambar</p>';
+            });
+
+            modal.show();
+        };
+
+        form.onsubmit = async e => {
+            e.preventDefault();
+            const id = document.getElementById('soalId').value;
+            const fd = new FormData(form);
+            const url = id ? `/api/soal-crud/${id}` : '/api/soal-crud/';
+            const method = id ? 'PUT' : 'POST';
+            await fetch(url, { method, body: fd });
+            location.reload();
+        };
+
+        window.deleteSoal = async id => {
+            if (confirm("Yakin ingin menghapus soal ini?")) {
+                await fetch(`/api/soal-crud/${id}`, { method: 'DELETE' });
+                location.reload();
+            }
+        };
+    });
+</script>
+
+{% endblock %}
