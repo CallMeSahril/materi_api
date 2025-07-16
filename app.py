@@ -158,4 +158,4 @@ api.add_namespace(soal_ns, path='/api/soal')
 api.add_namespace(achievement_ns, path='/api/user')
 api.add_namespace(musik_ns, path="/api/musik")
 if __name__ == '__main__':
-    app.run(port="5006", debug=True)
+    app.run(port="5006", host="0.0.0.0", debug=True)
