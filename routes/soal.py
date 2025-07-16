@@ -7,7 +7,7 @@ api = Namespace(
     'Soal', description='Soal berdasarkan Tile dan Jawaban Pengguna')
 
 # ==== Konstanta ====
-host_url = "https://nngwj5fn-5006.asse.devtunnels.ms"
+host_url = "195.88.211.177:5006"
 page_size = 2
 auto_finish_tiles = [16, 32, 48, 64]
 gambar_mapping = {
