@@ -65,12 +65,12 @@ class Register(Resource):
                 cursor.execute("INSERT INTO materi_progress (user_id, materi_id, is_watched, is_completed) VALUES (%s, %s, %s, %s)",
                                (user_id, materi_id, False, False))
 
-            cursor.execute("SELECT id FROM quiz_master")
-            quizzes = cursor.fetchall()
-            print(f"🔹 Quiz ditemukan: {len(quizzes)}")
-            for (quiz_id,) in quizzes:
-                cursor.execute("INSERT INTO quiz_progress (user_id, quiz_id, is_passed) VALUES (%s, %s, %s)",
-                               (user_id, quiz_id, False))
+            # cursor.execute("SELECT id FROM quiz_master")
+            # quizzes = cursor.fetchall()
+            # print(f"🔹 Quiz ditemukan: {len(quizzes)}")
+            # for (quiz_id,) in quizzes:
+            #     cursor.execute("INSERT INTO quiz_progress (user_id, quiz_id, is_passed) VALUES (%s, %s, %s)",
+            #                    (user_id, quiz_id, False))
 
             cursor.execute("SELECT id FROM achievement_master")
             achvs = cursor.fetchall()

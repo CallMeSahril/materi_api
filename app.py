@@ -1,3 +1,4 @@
+from flask import redirect, url_for, request
 from flask import Flask, send_from_directory, render_template
 from flask_restx import Api
 from routes.materi_routes import api as materi_ns
@@ -19,6 +20,110 @@ from db import get_connection
 app = Flask(__name__)
 api = Api(app, title="Materi API", version="1.0",
           description="API untuk manajemen materi dan file PDF")
+
+
+@app.route('/user-progress/<int:user_id>')
+def user_progress_view(user_id):
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT * FROM user_progress
+        WHERE user_id = %s
+        ORDER BY tile_id DESC, updated_at DESC
+    """, (user_id,))
+    rows = cursor.fetchall()
+
+    # Ambil hanya 1 data terakhir per tile_id
+    seen_tile_ids = set()
+    progress = []
+    for row in rows:
+        if row['tile_id'] not in seen_tile_ids:
+            progress.append(row)
+            seen_tile_ids.add(row['tile_id'])
+
+    cursor.close()
+    conn.close()
+    return render_template("user_progress.html", user_id=user_id, progress=progress)
+
+
+@app.route('/user-progress')
+def semua_user_progress_view():
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT up.*, u.name
+        FROM user_progress up
+        INNER JOIN (
+            SELECT user_id, MAX(updated_at) AS max_updated
+            FROM user_progress
+            GROUP BY user_id
+        ) latest ON up.user_id = latest.user_id AND up.updated_at = latest.max_updated
+        JOIN users u ON u.id = up.user_id
+        ORDER BY up.updated_at DESC
+    """)
+    progress = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return render_template("user_progress.html", progress=progress)
+
+
+@app.route('/user-progress/<int:user_id>/tambah-nyawa/<int:progress_id>', methods=['POST'])
+def tambah_nyawa(user_id, progress_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT lives FROM user_progress WHERE id = %s", (progress_id,))
+    current = cursor.fetchone()
+    if current and current[0] < 3:
+        cursor.execute(
+            "UPDATE user_progress SET lives = lives + 1 WHERE id = %s", (progress_id,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return redirect(url_for('semua_user_progress_view'))
+
+
+@app.route('/update-progress', methods=['POST'])
+def update_progress():
+    data = request.get_json()
+    user_id = data.get('user_id')
+    tile_id = data.get('tile_id')
+    status = data.get('status')
+    lives = data.get('lives')
+
+    if not all([user_id, tile_id, status, lives]):
+        return {'success': False, 'message': 'Data tidak lengkap'}, 400
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            UPDATE user_progress
+            SET status = %s, lives = %s
+            WHERE user_id = %s AND tile_id = %s
+        """, (status, lives, user_id, tile_id))
+        conn.commit()
+        return {'success': True}
+    except Exception as e:
+        conn.rollback()
+        return {'success': False, 'message': str(e)}, 500
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.route('/user-progress/<int:user_id>/unlock/<int:progress_id>', methods=['POST'])
+def unlock_tile(user_id, progress_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE user_progress SET status = 'unlocked' WHERE id = %s", (progress_id,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return redirect(url_for('semua_user_progress_view'))
 
 
 @app.route('/soal-crud-view')
