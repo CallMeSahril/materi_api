@@ -4,6 +4,10 @@ from flask_restx import Namespace, Resource, fields
 from db import get_connection
 
 api = Namespace('Map', description='Peta dan Progres Pengguna')
+add_life_by_id_model = api.model('AddLifeByUserId', {
+    'user_id': fields.Integer(required=True, description='User ID'),
+    'amount': fields.Integer(required=True, description='Jumlah nyawa yang akan ditambahkan')
+})
 
 # ====== SCHEMA =======
 tile_model = api.model('Tile', {
@@ -92,3 +96,69 @@ def fisher_yates_shuffle(arr):
         j = random.randint(0, i)
         arr[i], arr[j] = arr[j], arr[i]
     return arr
+
+
+@api.route('/add-life')
+class AddLife(Resource):
+    @api.expect(add_life_by_id_model)
+    def post(self):
+        """Tambah nyawa ke user_progress terakhir user, maksimal 3"""
+        data = request.get_json()
+        user_id = data.get('user_id')
+        amount = data.get('amount', 1)
+
+        if not user_id:
+            return {'message': 'user_id is required'}, 400
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Ambil entri terbaru user_progress user ini
+        cursor.execute("""
+            SELECT up.*
+            FROM user_progress up
+            INNER JOIN (
+                SELECT user_id, MAX(updated_at) AS max_updated
+                FROM user_progress
+                WHERE user_id = %s
+                GROUP BY user_id
+            ) latest
+            ON up.user_id = latest.user_id AND up.updated_at = latest.max_updated
+            ORDER BY up.updated_at DESC
+            LIMIT 1
+        """, (user_id,))
+        row = cursor.fetchone()
+
+        if not row:
+            cursor.close()
+            conn.close()
+            return {'message': 'No user_progress record found for this user'}, 404
+
+        # Tambahkan nyawa dengan batas maksimal 3
+        current_lives = row['lives']
+        added = min(amount, 3 - current_lives)
+        new_lives = min(current_lives + amount, 3)
+
+        if added <= 0:
+            cursor.close()
+            conn.close()
+            return {
+                'message': 'Lives already full (max 3)',
+                'current_lives': current_lives
+            }, 200
+
+        cursor.execute("""
+            UPDATE user_progress
+            SET lives = %s
+            WHERE id = %s
+        """, (new_lives, row['id']))
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return {
+            'message': f"{added} lives added (max 3)",
+            'tile_id': row['tile_id'],
+            'new_lives': new_lives
+        }, 200
