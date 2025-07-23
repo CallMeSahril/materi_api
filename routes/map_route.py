@@ -109,6 +109,8 @@ class AddLife(Resource):
         user_id = data.get('user_id')
         amount = data.get('amount', 1)
 
+        print(f"[DEBUG] user_id: {user_id}, amount: {amount}")
+
         if not user_id:
             return {'message': 'user_id is required'}, 400
 
@@ -132,6 +134,7 @@ class AddLife(Resource):
         row = cursor.fetchone()
 
         if not row:
+            print("[DEBUG] No user_progress found")
             cursor.close()
             conn.close()
             return {'message': 'No user_progress record found for this user'}, 404
@@ -140,12 +143,18 @@ class AddLife(Resource):
         tile_id = row['tile_id']
         status = row['status']
 
+        print(
+            f"[DEBUG] Current Lives: {current_lives}, Status: {status}, Tile ID: {tile_id}")
+
         # Hitung lives baru (maksimal 3)
         added = min(amount, 3 - current_lives)
         new_lives = min(current_lives + amount, 3)
 
+        print(f"[DEBUG] Lives to Add: {added}, New Lives: {new_lives}")
+
         # Jika nyawa sudah penuh
         if added <= 0:
+            print("[DEBUG] Lives already full")
             cursor.close()
             conn.close()
             return {
@@ -155,12 +164,14 @@ class AddLife(Resource):
 
         # Jika lives == 0, ubah status jadi 'unlocked'
         if current_lives == 0 and status != 'unlocked':
+            print("[DEBUG] Status updated to 'unlocked'")
             cursor.execute("""
                 UPDATE user_progress
                 SET lives = %s, status = 'unlocked'
                 WHERE id = %s
             """, (new_lives, row['id']))
         else:
+            print("[DEBUG] Only updating lives")
             cursor.execute("""
                 UPDATE user_progress
                 SET lives = %s
@@ -170,6 +181,8 @@ class AddLife(Resource):
         conn.commit()
         cursor.close()
         conn.close()
+
+        print("[DEBUG] Update committed to database")
 
         return {
             'message': f"{added} lives added (max 3)",
