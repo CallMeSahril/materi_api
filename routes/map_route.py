@@ -1,3 +1,4 @@
+import random
 from flask import request
 from flask_restx import Namespace, Resource, fields
 from db import get_connection
@@ -19,6 +20,7 @@ level_model = api.model('Level', {
     'name': fields.String,
     'theme': fields.String,
     'background_image': fields.String,
+    'lives': fields.Integer,  # tambahan lives per level
     'tiles': fields.List(fields.Nested(tile_model))
 })
 
@@ -40,20 +42,22 @@ class MapList(Resource):
         levels = cursor.fetchall()
 
         for level in levels:
+            level_id = level['id']
+
             cursor.execute("""
                 SELECT t.*, p.status AS progress_status
                 FROM tiles t
                 LEFT JOIN user_progress p ON t.id = p.tile_id AND p.user_id = %s
                 WHERE t.level_id = %s
                 ORDER BY t.position ASC
-            """, (user_id, level['id']))
+            """, (user_id, level_id))
             tiles = cursor.fetchall()
 
             # Mapping manual status
             for tile in tiles:
                 tile_status = tile['progress_status']
                 if tile_status == 'completed':
-                        tile['status'] = 'completed'
+                    tile['status'] = 'completed'
                 elif tile_status == 'in_progress':
                     tile['status'] = 'unlocked'
                 elif tile_status == 'failed':
@@ -63,16 +67,24 @@ class MapList(Resource):
                 else:
                     tile['status'] = 'locked'
 
-
                 del tile['progress_status']  # bersihkan kolom sementara
 
             level['tiles'] = tiles
-
-
+            cursor.execute("""
+                SELECT lives
+                FROM user_progress up
+                JOIN tiles t ON up.tile_id = t.id
+                WHERE up.user_id = %s AND t.level_id = %s
+                      AND up.status IN ('unlocked', 'in_progress', 'failed')
+                ORDER BY up.tile_id DESC
+                LIMIT 1
+            """, (user_id, level_id))
+            result = cursor.fetchone()
+            level['lives'] = result['lives'] if result else 3  # default 3
         cursor.close()
         conn.close()
         return levels
-import random
+
 
 def fisher_yates_shuffle(arr):
     n = len(arr)
