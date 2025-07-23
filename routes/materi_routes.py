@@ -29,7 +29,7 @@ class MateriList(Resource):
 
         for m in data:
             # base_url = request.host_url.rstrip('/')
-            base_url = "195.88.211.177:5006"
+            base_url = "http://195.88.211.177:5006"
             m["pdf_url"] = f"{base_url}/uploads/{m['filename']}"
         return data
 
