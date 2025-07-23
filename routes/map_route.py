@@ -102,7 +102,9 @@ def fisher_yates_shuffle(arr):
 class AddLife(Resource):
     @api.expect(add_life_by_id_model)
     def post(self):
-        """Tambah nyawa ke user_progress terakhir user, maksimal 3"""
+        """Tambah nyawa ke user_progress terakhir user, maksimal 3.
+        Jika lives == 0, status akan diubah menjadi 'unlocked'
+        """
         data = request.get_json()
         user_id = data.get('user_id')
         amount = data.get('amount', 1)
@@ -134,11 +136,15 @@ class AddLife(Resource):
             conn.close()
             return {'message': 'No user_progress record found for this user'}, 404
 
-        # Tambahkan nyawa dengan batas maksimal 3
         current_lives = row['lives']
+        tile_id = row['tile_id']
+        status = row['status']
+
+        # Hitung lives baru (maksimal 3)
         added = min(amount, 3 - current_lives)
         new_lives = min(current_lives + amount, 3)
 
+        # Jika nyawa sudah penuh
         if added <= 0:
             cursor.close()
             conn.close()
@@ -147,11 +153,19 @@ class AddLife(Resource):
                 'current_lives': current_lives
             }, 200
 
-        cursor.execute("""
-            UPDATE user_progress
-            SET lives = %s
-            WHERE id = %s
-        """, (new_lives, row['id']))
+        # Jika lives == 0, ubah status jadi 'unlocked'
+        if current_lives == 0 and status != 'unlocked':
+            cursor.execute("""
+                UPDATE user_progress
+                SET lives = %s, status = 'unlocked'
+                WHERE id = %s
+            """, (new_lives, row['id']))
+        else:
+            cursor.execute("""
+                UPDATE user_progress
+                SET lives = %s
+                WHERE id = %s
+            """, (new_lives, row['id']))
 
         conn.commit()
         cursor.close()
@@ -159,6 +173,7 @@ class AddLife(Resource):
 
         return {
             'message': f"{added} lives added (max 3)",
-            'tile_id': row['tile_id'],
-            'new_lives': new_lives
+            'tile_id': tile_id,
+            'new_lives': new_lives,
+            'status_updated': 'unlocked' if current_lives == 0 and status != 'unlocked' else status
         }, 200
