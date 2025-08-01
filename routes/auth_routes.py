@@ -136,3 +136,98 @@ class Login(Resource):
         finally:
             cursor.close()
             conn.close()
+
+
+@auth_ns.route('/change-password/<int:user_id>')
+class ChangePassword(Resource):
+    def put(self, user_id):
+        data = request.json
+        old_pw = data.get('old_password')
+        new_pw = data.get('new_password')
+        confirm_pw = data.get('confirm_password')
+
+        print(f"🔐 Request ubah password user_id={user_id}")
+        print(
+            f"📥 Input: old_pw={'*' * len(old_pw) if old_pw else None}, new_pw={'*' * len(new_pw) if new_pw else None}")
+
+        if not old_pw or not new_pw or not confirm_pw:
+            print("⚠️ Gagal: Field kosong")
+            return {'message': 'Semua field wajib diisi'}, 400
+
+        if new_pw != confirm_pw:
+            print("⚠️ Gagal: Konfirmasi password tidak cocok")
+            return {'message': 'Konfirmasi password tidak cocok'}, 400
+
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        try:
+            old_hashed = hashlib.sha256(old_pw.encode()).hexdigest()
+            cursor.execute(
+                "SELECT password FROM users WHERE id = %s", (user_id,))
+            result = cursor.fetchone()
+
+            if not result:
+                print("❌ Gagal: User tidak ditemukan")
+                return {'message': 'User tidak ditemukan'}, 404
+
+            if result[0] != old_hashed:
+                print("❌ Gagal: Password lama salah")
+                return {'message': 'Password lama salah'}, 401
+
+            new_hashed = hashlib.sha256(new_pw.encode()).hexdigest()
+            cursor.execute(
+                "UPDATE users SET password = %s WHERE id = %s", (new_hashed, user_id))
+            conn.commit()
+
+            print("✅ Password berhasil diubah")
+            return {'message': 'Password berhasil diubah'}, 200
+
+        except mysql.connector.Error as e:
+            conn.rollback()
+            print(f"❌ Database Error: {str(e)}")
+            return {'message': 'Database error: ' + str(e)}, 500
+
+        finally:
+            cursor.close()
+            conn.close()
+
+
+@auth_ns.route('/delete/<int:user_id>')
+class ForceDeleteUser(Resource):
+    def delete(self, user_id):
+        print(
+            f"🗑️ Permintaan hapus user_id={user_id} dan semua relasi terkait")
+
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        try:
+            # Hapus seluruh relasi
+            tables = [
+                "storytelling_progress",
+                "materi_progress",
+                "quiz_progress",
+                "achievement_progress",
+                "user_progress"
+            ]
+
+            for table in tables:
+                cursor.execute(
+                    f"DELETE FROM {table} WHERE user_id = %s", (user_id,))
+                print(f"✔️ Data dari {table} dihapus")
+
+            cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
+            print(f"✅ User ID {user_id} berhasil dihapus dari tabel users")
+
+            conn.commit()
+            return {'message': f'User ID {user_id} dan seluruh datanya berhasil dihapus'}, 200
+
+        except mysql.connector.Error as e:
+            conn.rollback()
+            print(f"❌ Database Error saat hapus user: {str(e)}")
+            return {'message': 'Database error: ' + str(e)}, 500
+
+        finally:
+            cursor.close()
+            conn.close()
